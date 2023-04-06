@@ -3,6 +3,7 @@ from tensorflow.keras.layers import Input, Dense, Lambda
 from tensorflow.keras.models import Model
 from tensorflow.keras.losses import mse
 from tensorflow.keras.datasets import mnist
+from keras import layers
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -10,11 +11,11 @@ input_dim = 784
 latent_dim = 2
 
 # Define encoder network
-inputs = Input(shape=(input_dim,))
-x = Dense(256, activation='relu')(inputs)
-x = Dense(128, activation='relu')(x)
-z_mean = Dense(latent_dim)(x)
-z_log_var = Dense(latent_dim)(x)
+encoder_inputs = layers.Input(shape=(784,))
+x = layers.Dense(256, activation='relu')(encoder_inputs)
+x = layers.Dense(128, activation='relu')(x)
+z_mean = layers.Dense(latent_dim, name='z_mean')(x)
+z_log_var = layers.Dense(latent_dim, name='z_log_var')(x)
 
 # Define sampling function
 def sampling(args):
@@ -24,19 +25,20 @@ def sampling(args):
 z = Lambda(sampling)([z_mean, z_log_var])
 
 # Define decoder network
-decoder_input = Input(shape=(latent_dim,))
-x = Dense(256, activation='relu')(decoder_input)
-x = Dense(128, activation='relu')(x)
-outputs = Dense(input_dim, activation='sigmoid')(x)
+decoder_inputs = layers.Input(shape=(latent_dim,))
+x = layers.Dense(128, activation='relu')(decoder_inputs)
+x = layers.Dense(256, activation='relu')(x)
+decoder_outputs = layers.Dense(784, activation='sigmoid')(x)
 
 # Define VAE model
-encoder = Model(inputs, [z_mean, z_log_var, z], name='encoder')
-decoder = Model(decoder_input, outputs, name='decoder')
-vae_outputs = decoder(encoder(inputs)[2])
-vae = Model(inputs, vae_outputs, name='vae')
+encoder = Model(encoder_inputs, [z_mean, z_log_var, z], name='encoder')
+decoder = Model(decoder_inputs, decoder_outputs, name='decoder')
+vae_outputs = decoder(encoder(encoder_inputs)[2])
+vae = Model(encoder_inputs, vae_outputs, name='vae')
+
 
 # Define VAE loss function
-reconstruction_loss = mse(inputs, vae_outputs)
+reconstruction_loss = mse(encoder_inputs, vae_outputs)
 kl_loss = -0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
 vae_loss = K.mean(reconstruction_loss + kl_loss)
 vae.add_loss(vae_loss)
